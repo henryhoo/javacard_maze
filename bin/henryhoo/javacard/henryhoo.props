@@ -1,0 +1,10 @@
+#package specification
+#Fri Jun 05 20:58:41 CST 2015
+masktools-version=1.1
+henryhoo-aid=62757074687063
+henryhoo-major=1
+jcop-packages=henryhoo
+henryhoo-clazzes=henryhoo.Mymaze henryhoo.Node
+henryhoo.Mymaze-aid=627570746870632E31
+henryhoo-minor=0
+henryhoo-base=internal
