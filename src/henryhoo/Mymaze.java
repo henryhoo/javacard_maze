@@ -37,9 +37,10 @@ public class Mymaze extends Applet {
 	byte m; // 迷宫行数
 	byte n; // 迷宫列数
 	short length; // 数组总长度
-	byte[] power = new byte[256]; // 每步的权值
-	byte[] hp = new byte[16]; // 总体生命值
-	byte[] path = new byte[16]; // 记录路径
+	byte[] power; // 每步的权值
+	short[] hp; // 总体生命值
+	byte[] path; // 记录路径\
+	byte[] flag;
 	Node[] node;
 
 	public static void install(byte[] bArray, short bOffset, byte bLength) {
@@ -67,8 +68,8 @@ public class Mymaze extends Applet {
 			map(apdu);
 			break;
 		case GET_ROUTE:
-			if (getroute((short) 0)) {
-				printroute(path, hp[n + m - 2], apdu);
+			if (getroutelong()) {
+				printroute(path, hp[n * m - 1], apdu);
 			} else {
 				ISOException.throwIt(SW_FINDROUTE_FAILED);// 无最大路径
 			}
@@ -77,7 +78,7 @@ public class Mymaze extends Applet {
 			getmaxweight();// Dijkstra算法思想，求出起始点（0，0）到每个节点的最大路径和最大值
 			if (node[m * n - 1].high > 0) {
 				for (short i = 0; i < length; i++) {
-					if (node[i].high < 0) {
+					if (node[(short) (node[m * n - 1].hpath[i] & 0xff)].high < 0) {
 						ISOException.throwIt(SW_FINDROUTE_FAILED);// 无最大路径
 					}
 				}
@@ -88,16 +89,16 @@ public class Mymaze extends Applet {
 			break;
 		case GET_MINWEIGHT:
 			getmaxweight();
-			byte maxhp = 0;
+			byte maxhp = 1;
 			for (short i = 0; i < n + m - 1; i++) {
-				if (node[node[m * n - 1].hpath[i]].high < maxhp) {
-					maxhp = node[i].high;
+				if (node[(short) (node[m * n - 1].hpath[i] & 0xff)].high < maxhp) {
+					maxhp = (byte) node[i].high;
 				}
 			}
 			if (maxhp < -10)
 				ISOException.throwIt(SW_NO_RESULT);// 无最大权值路径
 			else
-				printroute(node[m * n - 1].hpath, (byte) (1 - maxhp), apdu);
+				printroute(node[m * n - 1].hpath, (byte) (-maxhp), apdu);
 			break;
 		}
 	}
@@ -108,6 +109,10 @@ public class Mymaze extends Applet {
 		n = buffer[ISO7816.OFFSET_P2];
 		length = (short) (buffer[ISO7816.OFFSET_LC] & 0xff);
 		node = new Node[length];
+		flag = new byte[length];
+		power = new byte[length];
+		hp = new short[length];
+		path = new byte[n * m];
 		Util.arrayCopyNonAtomic(buffer, (short) 5, power, (short) 0, length); // 数据复制
 		if (length != m * n)
 			ISOException.throwIt(SW_WRONG_LC); // 错误LC
@@ -154,12 +159,13 @@ public class Mymaze extends Applet {
 	}
 
 	private boolean getroute(short root) {
-		path[root / n + root % n] = (byte) root;
+		path[(short) (root & 0xff) / n + (short) (root & 0xff) % n] = (byte) root;
 		if (root == 0) {
 			hp[root / n + root % n] = node[root].weight;
 		} else {
-			hp[root / n + root % n] = (byte) (hp[root / n + root % n - 1] + node[root].weight);
-			if (hp[root / n + root % n] <= (byte) 0) {
+			hp[(short) (root & 0xff) / n + (short) (root & 0xff) % n] = (byte) (hp[(short) (root & 0xff)
+					/ n + (short) (root & 0xff) % n - 1] + node[(short) (root & 0xff)].weight);
+			if (hp[(short) (root & 0xff) / n + (short) (root & 0xff) % n] < (byte) 0) {
 				return false;
 			}
 		}
@@ -168,21 +174,21 @@ public class Mymaze extends Applet {
 			return true;
 		}
 
-		if (root >= n * (m - 1)) {// 最后一行
+		if ((short) (root & 0xff) >= n * (m - 1)) {// 最后一行
 			if (!getroute((short) (root + 1))) {
 				return false;
 			} else {
 				return true;
 			}
-		} else if (root % n == n - 1) {// 最后一列
+		} else if ((short) (root & 0xff) % n == n - 1) {// 最后一列
 			if (!getroute((short) (root + n))) {
 				return false;
 			} else {
 				return true;
 			}
 		} else {// 普遍情况
-			if (!getroute((short) (root + 1))) {
-				if (!getroute((short) (root + n))) {
+			if (!getroute((short) ((short) (root & 0xff) + 1))) {
+				if (!getroute((short) ((short) (root & 0xff) + n))) {
 					return false;
 				} else {
 					return true;
@@ -190,17 +196,77 @@ public class Mymaze extends Applet {
 			} else {
 				return true;
 			}
-
 		}
 		// }
 	}
 
-	private void printroute(byte[] route, byte weight, APDU apdu) {
+	private boolean getroutelong() {
+		short j = 0;
+		hp[0] = power[0];
+		path[0] = 0;
+		if (power[0] + power[1] < 0 && power[0] + power[n] < 0) {
+			return false;
+		}
+		for (short i = 0; i < n * m - 1; i++) {
+			flag[i] = 2;
+		}
+		for (short i = (short) (n * (m - 1)); i < n * m - 1; i++) {
+			flag[i] = 3;
+		}
+		for (short i = (short) (n - 1); i < n * m - 1; i += n) {
+			flag[i] = 4;
+		}
+		while (j != n * m - 1) {
+			path[j / n + j % n] = (byte) j;
+			switch (flag[j]) {
+			case 0:
+				j = (short) (path[j / n + j % n - 1] & 0xff);
+				if (flag[0] == 0)
+					j = (short) (n * m);
+				break;
+			case 1:
+				hp[j + n] = (short) (hp[j] + power[j + n]);
+				if (hp[j + n] < 0)
+					flag[j] = 0;
+				else
+					j += n;
+				break;
+			case 2:
+				hp[j + 1] = (short) (hp[j] + power[j + 1]);
+				if (hp[j + 1] < 0)
+					flag[j] = 1;
+				else
+					j++;
+				break;
+			case 3:
+				hp[j + 1] = (short) (hp[j] + power[j + 1]);
+				if (hp[j + 1] < 0)
+					flag[j] = 0;
+				else
+					j++;
+				break;
+			case 4:
+				hp[j + n] = (short) (hp[j] + power[j + n]);
+				if (hp[j + n] < 0)
+					flag[j] = 0;
+				else
+					j += n;
+				break;
+			}
+		}
+		if (j == m * m)
+			return false;
+		else
+			return true;
+	}
+
+	private void printroute(byte[] route, short weight, APDU apdu) {
 		byte[] result = apdu.getBuffer();
-		result[0] = weight;
-		for (short i = 0; i < m + n - 1; i++) {// 转化为坐标输出
-			result[2 * i + 1] = (byte) (route[i] / n);// 横坐标取商
-			result[2 * i + 2] = (byte) (route[i] % n);// 纵坐标取余
+		result[0] = (byte) (weight / 128);
+		result[1] = (byte) (weight - result[0] * 128);
+		for (short i = 1; i < m + n; i++) {// 转化为坐标输出
+			result[2 * i] = (byte) ((short) (route[i - 1] & 0xff) / n);// 横坐标取商
+			result[2 * i + 1] = (byte) ((short) (route[i - 1] & 0xff) % n);// 纵坐标取余
 		}
 		apdu.setOutgoingAndSend((short) 0, (short) (2 * (m + n) - 1));
 	}
