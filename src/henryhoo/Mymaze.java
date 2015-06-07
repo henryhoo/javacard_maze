@@ -98,7 +98,7 @@ public class Mymaze extends Applet {
 			if (maxhp < -10)
 				ISOException.throwIt(SW_NO_RESULT);// 无最大权值路径
 			else
-				printroute(node[m * n - 1].hpath, (byte) (-maxhp), apdu);
+				printroute(node[m * n - 1].hpath, (byte) (1-maxhp), apdu);
 			break;
 		}
 	}
@@ -132,24 +132,24 @@ public class Mymaze extends Applet {
 		for (short i = 1; i < node.length; i++) {
 			if (i < n) {
 				// 第一行，只可能来自于前一个节点
-				node[i].high = (byte) (node[i - 1].high + node[i].weight);
+				node[i].high = (short) (node[i - 1].high + node[i].weight);
 				Util.arrayCopyNonAtomic(node[i - 1].hpath, (short) 0,
 						node[i].hpath, (short) 0, (short) i);
 				node[i].hpath[i] = (byte) i;
 			} else if (i % n == 0) {
 				// 第一列，只可能来自于前n个节点（上方节点）
-				node[i].high = (byte) (node[i - n].high + node[i].weight);
+				node[i].high = (short) (node[i - n].high + node[i].weight);
 				Util.arrayCopyNonAtomic(node[i - n].hpath, (short) 0,
 						node[i].hpath, (short) 0, (short) (i / n));
 				node[i].hpath[i / n] = (byte) i;
 			} else {// 普遍情况，对比前n个和前一个节点，取大者
 				if (node[i - 1].high > node[i - n].high) {
-					node[i].high = (byte) (node[i - 1].high + node[i].weight);
+					node[i].high = (short) (node[i - 1].high + node[i].weight);
 					Util.arrayCopyNonAtomic(node[i - 1].hpath, (short) 0,
 							node[i].hpath, (short) 0, (short) (i / n + i % n));
 					node[i].hpath[i / n + i % n] = (byte) i;
 				} else {
-					node[i].high = (byte) (node[i - n].high + node[i].weight);
+					node[i].high = (short) (node[i - n].high + node[i].weight);
 					Util.arrayCopyNonAtomic(node[i - n].hpath, (short) 0,
 							node[i].hpath, (short) 0, (short) (i / n + i % n));
 					node[i].hpath[i / n + i % n] = (byte) i;
@@ -216,45 +216,51 @@ public class Mymaze extends Applet {
 		for (short i = (short) (n - 1); i < n * m - 1; i += n) {
 			flag[i] = 4;
 		}
-		while (j != n * m - 1) {
+		while (j < n * m - 1) {
 			path[j / n + j % n] = (byte) j;
 			switch (flag[j]) {
 			case 0:
+				if (j==0) {
+					if (flag[0] == 0)
+						j = (short) (n * m);
+				}
+				else
 				j = (short) (path[j / n + j % n - 1] & 0xff);
-				if (flag[0] == 0)
-					j = (short) (n * m);
+				
+				
 				break;
 			case 1:
 				hp[j + n] = (short) (hp[j] + power[j + n]);
-				if (hp[j + n] < 0)
+				if (hp[j + n] < 0 ||flag[j+n]==0){
 					flag[j] = 0;
+				}
 				else
 					j += n;
 				break;
 			case 2:
 				hp[j + 1] = (short) (hp[j] + power[j + 1]);
-				if (hp[j + 1] < 0)
+				if (hp[j + 1] < 0 ||flag[j+1]==0)
 					flag[j] = 1;
 				else
 					j++;
 				break;
 			case 3:
 				hp[j + 1] = (short) (hp[j] + power[j + 1]);
-				if (hp[j + 1] < 0)
+				if (hp[j + 1] < 0||flag[j+1]==0)
 					flag[j] = 0;
 				else
 					j++;
 				break;
 			case 4:
 				hp[j + n] = (short) (hp[j] + power[j + n]);
-				if (hp[j + n] < 0)
+				if (hp[j + n] < 0||flag[j+n]==0)
 					flag[j] = 0;
 				else
 					j += n;
 				break;
 			}
 		}
-		if (j == m * m)
+		if (j == m * n)
 			return false;
 		else
 			return true;
